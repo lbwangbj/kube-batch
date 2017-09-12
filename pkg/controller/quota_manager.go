@@ -77,29 +77,30 @@ func (qm *quotaManager) updateQuota(allocator *schedulercache.ResourceQuotaAlloc
 func (qm *quotaManager) run() {
 	// get request from chan and update to Quota.
 	cs := kubernetes.NewForConfigOrDie(qm.config)
+
 	for {
 		res := <-qm.ch
+
 		rqController := cs.CoreV1().ResourceQuotas(res.ns)
 		var options meta_v1.ListOptions
 		rqList, err := rqController.List(options)
 		if len(rqList.Items) != 1 || err != nil {
 			glog.Error("more than one resourceQuota or ecounter an error")
-		} else {
-			for _, rq := range rqList.Items {
-				rqupdate := rq.DeepCopy()
-				cpuQuota := *resource.NewQuantity(res.cpu, resource.DecimalSI)
-				cpuQuota.String()
-				memoryQuota := *resource.NewQuantity(res.memory, resource.BinarySI)
-				memoryQuota.String()
-				rqupdate.Spec.Hard["limits.cpu"] = cpuQuota
-				rqupdate.Spec.Hard["requests.cpu"] = cpuQuota
-				rqupdate.Spec.Hard["limits.memory"] = memoryQuota
-				rqupdate.Spec.Hard["requests.memory"] = memoryQuota
+			continue
+		}
 
-				_, err := rqController.Update(rqupdate)
-				if err != nil {
-					glog.Error("failed to update resource quota")
-				}
+		for _, rq := range rqList.Items {
+			updatedRq := rq.DeepCopy()
+			cpuQuota := *resource.NewQuantity(res.cpu, resource.DecimalSI)
+			memoryQuota := *resource.NewQuantity(res.memory, resource.BinarySI)
+			updatedRq.Spec.Hard["limits.cpu"] = cpuQuota
+			updatedRq.Spec.Hard["requests.cpu"] = cpuQuota
+			updatedRq.Spec.Hard["limits.memory"] = memoryQuota
+			updatedRq.Spec.Hard["requests.memory"] = memoryQuota
+
+			_, err := rqController.Update(updatedRq)
+			if err != nil {
+				glog.Error("failed to update resource quota")
 			}
 		}
 	}
