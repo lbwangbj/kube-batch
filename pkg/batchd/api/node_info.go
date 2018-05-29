@@ -14,14 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cache
+package api
 
 import (
 	"k8s.io/api/core/v1"
 )
 
+type NodeID string
+
 // NodeInfo is node level aggregated information.
 type NodeInfo struct {
+	UID NodeID
+
 	Name string
 	Node *v1.Node
 
@@ -30,61 +34,56 @@ type NodeInfo struct {
 	// The used resource on that node, including running and terminating
 	// pods
 	Used *Resource
-	// The resources that is planned to used
-	// policy will use it to decide if assign pods on this node
-	UnAcceptedAllocated *Resource
 
 	Allocatable *Resource
 	Capability  *Resource
 
-	Pods map[string]*TaskInfo
+	Tasks map[TaskID]*TaskInfo
 }
 
 func NewNodeInfo(node *v1.Node) *NodeInfo {
 	if node == nil {
 		return &NodeInfo{
-			Idle:                EmptyResource(),
-			Used:                EmptyResource(),
-			UnAcceptedAllocated: EmptyResource(),
+			Idle: EmptyResource(),
+			Used: EmptyResource(),
 
 			Allocatable: EmptyResource(),
 			Capability:  EmptyResource(),
 
-			Pods: make(map[string]*TaskInfo),
+			Tasks: make(map[TaskID]*TaskInfo),
 		}
 	}
 
 	return &NodeInfo{
-		Name:                node.Name,
-		Node:                node,
-		Idle:                NewResource(node.Status.Allocatable),
-		Used:                EmptyResource(),
-		UnAcceptedAllocated: EmptyResource(),
+		UID:  NodeID(node.Name),
+		Name: node.Name,
+		Node: node,
+		Idle: NewResource(node.Status.Allocatable),
+		Used: EmptyResource(),
 
 		Allocatable: NewResource(node.Status.Allocatable),
 		Capability:  NewResource(node.Status.Capacity),
 
-		Pods: make(map[string]*TaskInfo),
+		Tasks: make(map[TaskID]*TaskInfo),
 	}
 }
 
 func (ni *NodeInfo) Clone() *NodeInfo {
-	pods := make(map[string]*TaskInfo, len(ni.Pods))
+	tasks := make(map[TaskID]*TaskInfo, len(ni.Tasks))
 
-	for _, p := range ni.Pods {
-		pods[podKey(p.Pod)] = p.Clone()
+	for _, p := range ni.Tasks {
+		tasks[p.UID] = p.Clone()
 	}
 
 	return &NodeInfo{
-		Name:                ni.Name,
-		Node:                ni.Node,
-		Idle:                ni.Idle.Clone(),
-		Used:                ni.Used.Clone(),
-		UnAcceptedAllocated: ni.UnAcceptedAllocated.Clone(),
-		Allocatable:         ni.Allocatable.Clone(),
-		Capability:          ni.Capability.Clone(),
+		Name:        ni.Name,
+		Node:        ni.Node,
+		Idle:        ni.Idle.Clone(),
+		Used:        ni.Used.Clone(),
+		Allocatable: ni.Allocatable.Clone(),
+		Capability:  ni.Capability.Clone(),
 
-		Pods: pods,
+		Tasks: tasks,
 	}
 }
 
@@ -92,7 +91,7 @@ func (ni *NodeInfo) SetNode(node *v1.Node) {
 	if ni.Node == nil {
 		ni.Idle = NewResource(node.Status.Allocatable)
 
-		for _, p := range ni.Pods {
+		for _, p := range ni.Tasks {
 			ni.Idle.Sub(p.Resreq)
 			ni.Used.Add(p.Resreq)
 		}
@@ -110,7 +109,7 @@ func (ni *NodeInfo) AddPod(p *TaskInfo) {
 		ni.Used.Add(p.Resreq)
 	}
 
-	ni.Pods[podKey(p.Pod)] = p
+	ni.Tasks[p.UID] = p
 }
 
 func (ni *NodeInfo) RemovePod(p *TaskInfo) {
@@ -119,25 +118,25 @@ func (ni *NodeInfo) RemovePod(p *TaskInfo) {
 		ni.Used.Sub(p.Resreq)
 	}
 
-	delete(ni.Pods, podKey(p.Pod))
+	delete(ni.Tasks, p.UID)
 }
 
-func (ni *NodeInfo) AcceptAllocated() {
-	ni.Idle.Sub(ni.UnAcceptedAllocated)
-	ni.UnAcceptedAllocated = EmptyResource()
-}
+// func (ni *NodeInfo) AcceptAllocated() {
+// 	ni.Idle.Sub(ni.UnAcceptedAllocated)
+// 	ni.UnAcceptedAllocated = EmptyResource()
+// }
 
-func (ni *NodeInfo) DiscardAllocated() {
-	ni.UnAcceptedAllocated = EmptyResource()
-}
+// func (ni *NodeInfo) DiscardAllocated() {
+// 	ni.UnAcceptedAllocated = EmptyResource()
+// }
 
-func (ni *NodeInfo) CurrentIdle() *Resource {
-	currentIdle := ni.Idle.Clone()
-	currentIdle.Sub(ni.UnAcceptedAllocated)
+// func (ni *NodeInfo) CurrentIdle() *Resource {
+// 	currentIdle := ni.Idle.Clone()
+// 	currentIdle.Sub(ni.UnAcceptedAllocated)
 
-	return currentIdle
-}
+// 	return currentIdle
+// }
 
-func (ni *NodeInfo) AddUnAcceptedAllocated(r *Resource) {
-	ni.UnAcceptedAllocated.Add(r)
-}
+// func (ni *NodeInfo) AddUnAcceptedAllocated(r *Resource) {
+// 	ni.UnAcceptedAllocated.Add(r)
+// }

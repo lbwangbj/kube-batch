@@ -17,65 +17,30 @@ limitations under the License.
 package policy
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/golang/glog"
 
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 
 	schedcache "github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/cache"
-	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/client/clientset"
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy"
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy/framework"
 )
 
 type PolicyController struct {
-	config     *rest.Config
-	clientset  *clientset.Clientset
-	kubeclient *kubernetes.Clientset
-	cache      schedcache.Cache
-	allocator  policy.Interface
-	podSets    *cache.FIFO
+	config *rest.Config
+	// clientset  *clientset.Clientset
+	// kubeclient *kubernetes.Clientset
+	cache schedcache.Cache
+	// podSets    *cache.FIFO
 }
 
-func podSetKey(obj interface{}) (string, error) {
-	podSet, ok := obj.(*schedcache.JobInfo)
-	if !ok {
-		return "", fmt.Errorf("not a PodSet")
-	}
-
-	return fmt.Sprintf("%s/%s", podSet.Namespace, podSet.Name), nil
-}
-
-func NewPolicyController(config *rest.Config, policyName string, schedulerName string) (*PolicyController, error) {
-	cs, err := clientset.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("fail to create client for PolicyController: %#v", err)
-	}
-
-	kc, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kube client for PolicyController: %#v", err)
-	}
-
-	alloc, err := policy.New(policyName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create allocator: %#v", err)
-	}
-
+func NewPolicyController(config *rest.Config, schedulerName string) (*PolicyController, error) {
 	policyController := &PolicyController{
-		config:     config,
-		clientset:  cs,
-		kubeclient: kc,
-		cache:      schedcache.New(config, schedulerName),
-		allocator:  alloc,
-		podSets:    cache.NewFIFO(podSetKey),
+		config: config,
+		cache:  schedcache.New(config, schedulerName),
 	}
 
 	return policyController, nil
@@ -86,97 +51,19 @@ func (pc *PolicyController) Run(stopCh <-chan struct{}) {
 	go pc.cache.Run(stopCh)
 	pc.cache.WaitForCacheSync(stopCh)
 
-	go wait.Until(pc.runOnce, 2*time.Second, stopCh)
-	go wait.Until(pc.processAllocDecision, 0, stopCh)
+	go wait.Until(pc.runOnce, 20*time.Second, stopCh)
 }
 
 func (pc *PolicyController) runOnce() {
 	glog.V(4).Infof("Start scheduling ...")
 	defer glog.V(4).Infof("End scheduling ...")
 
-	pc.cancelAllocDecisionProcessing()
-
 	ssn := framework.OpenSession(pc.cache)
+	defer framework.CloseSession(ssn)
 
-	queues := pc.allocator.Execute(ssn)
-
-	pc.assumePods(queues)
-
-	pc.enqueue(queues)
-
-	framework.CloseSession(ssn)
-}
-
-func (pc *PolicyController) enqueue(queues []*schedcache.QueueInfo) {
-	for _, c := range queues {
-		for _, ps := range c.PodSets {
-			pc.podSets.Add(ps)
-		}
+	for _, action := range policy.ActionChain {
+		glog.V(3).Infof("Executue action %s in Session %v",
+			action.Name(), ssn.ID)
+		action.Execute(ssn)
 	}
-}
-
-func (pc *PolicyController) cancelAllocDecisionProcessing() {
-	// clean up FIFO Queue podSets
-	err := pc.podSets.Replace([]interface{}{}, "")
-	if err != nil {
-		glog.V(4).Infof("Reset podSets error %v", err)
-	}
-}
-
-func (pc *PolicyController) assumePods(queues []*schedcache.QueueInfo) {
-	for _, queue := range queues {
-		for _, ps := range queue.PodSets {
-			for _, p := range ps.Pending {
-				if len(p.NodeName) != 0 {
-					pc.assume(p.Pod.DeepCopy(), p.NodeName)
-				}
-			}
-		}
-	}
-}
-
-// assume signals to the cache that a pod is already in the cache, so that binding can be asynchronous.
-// assume modifies `assumed`
-func (pc *PolicyController) assume(assumed *v1.Pod, host string) {
-	assumed.Spec.NodeName = host
-	err := pc.cache.AssumePod(assumed)
-	if err != nil {
-		glog.V(4).Infof("fail to assume pod %s", assumed.Name)
-	}
-}
-
-func (pc *PolicyController) processAllocDecision() {
-	pc.podSets.Pop(func(obj interface{}) error {
-		ps, ok := obj.(*schedcache.JobInfo)
-		if !ok {
-			return fmt.Errorf("not a PodSet")
-		}
-
-		for _, p := range ps.Assigned {
-			if len(p.NodeName) != 0 {
-				if err := pc.kubeclient.CoreV1().Pods(p.Namespace).Bind(&v1.Binding{
-					ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: p.Name, UID: p.UID},
-					Target: v1.ObjectReference{
-						Kind: "Node",
-						Name: p.NodeName,
-					},
-				}); err != nil {
-					glog.Infof("Failed to bind pod <%v/%v>: %#v", p.Namespace, p.Name, err)
-					continue
-				}
-			}
-		}
-
-		for _, p := range ps.Running {
-			if len(p.NodeName) == 0 {
-				// TODO(k82cn): it's better to use /eviction instead of delete to avoid race-condition.
-				if err := pc.kubeclient.CoreV1().Pods(p.Namespace).Delete(p.Name, &metav1.DeleteOptions{}); err != nil {
-					glog.Infof("Failed to preempt pod <%v/%v>: %#v", p.Namespace, p.Name, err)
-					continue
-				}
-			}
-		}
-
-		return nil
-	})
 }

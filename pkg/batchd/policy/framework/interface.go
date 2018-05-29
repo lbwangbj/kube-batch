@@ -14,24 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package policy
+package framework
 
-import (
-	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/cache"
-	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy/framework"
-)
-
-// Interface is the interface of policy.
-type Interface interface {
-	// The unique name of allocator.
+// Action is the interface of actions.
+type Action interface {
+	// Name is the unique name of action.
 	Name() string
 
 	// Initialize initializes the allocator plugins.
 	Initialize()
 
 	// Execute allocates the cluster's resources into each queue.
-	Execute(ssn *framework.Session) []*cache.QueueInfo
+	Execute(ssn *Session)
 
 	// UnIntialize un-initializes the allocator plugins.
 	UnInitialize()
+}
+
+// Plugin is the interface of plugins.
+type Plugin interface {
+	// The name of plugin
+	Name() string
+
+	// OnSessionOpen is the callback func when framework opens a session
+	OnSessionOpen(session *Session)
+
+	// OnSessionClose is the callback func when framework closes a session
+	OnSessionClose(session *Session)
 }

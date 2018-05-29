@@ -17,22 +17,54 @@ limitations under the License.
 package framework
 
 import (
+	"sync"
+
 	"k8s.io/apimachinery/pkg/util/uuid"
 
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/cache"
 )
 
+type PluginBuilder func() Plugin
+
+var mutex sync.Mutex
+var pluginBuidlers []PluginBuilder
+
 func OpenSession(cache cache.Cache) *Session {
 	snapshot := cache.Snapshot()
 
-	return &Session{
+	ssn := &Session{
 		ID:     uuid.NewUUID(),
+		cache:  cache,
+		Tasks:  snapshot.Tasks,
+		Jobs:   snapshot.Jobs,
 		Queues: snapshot.Queues,
 		Nodes:  snapshot.Nodes,
 	}
+
+	for _, pb := range pluginBuidlers {
+		p := pb()
+		p.OnSessionOpen(ssn)
+		ssn.plugins[p.Name()] = p
+	}
+
+	return ssn
 }
 
 func CloseSession(ssn *Session) {
+	for _, p := range ssn.plugins {
+		p.OnSessionClose(ssn)
+	}
+
 	ssn.Queues = nil
 	ssn.Nodes = nil
+
+	ssn.cache = nil
+	ssn.plugins = nil
+}
+
+func RegisterPluginBuilder(pb PluginBuilder) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	pluginBuidlers = append(pluginBuidlers, pb)
 }

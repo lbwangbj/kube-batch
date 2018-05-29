@@ -16,33 +16,26 @@ limitations under the License.
 
 package allocate
 
-import (
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
+// func fetchMatchNodeForPodSet(psi *podSetInfo, nodes map[string]*api.NodeInfo) []*api.NodeInfo {
+// 	matchNodes := make([]*api.NodeInfo, 0)
+// 	for _, node := range nodes {
+// 		if podSetMatchesNodeLabels(psi, node.Node) {
+// 			matchNodes = append(matchNodes, node)
+// 		}
+// 	}
 
-	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/cache"
-)
+// 	return matchNodes
+// }
 
-func fetchMatchNodeForPodSet(psi *podSetInfo, nodes []*cache.NodeInfo) []*cache.NodeInfo {
-	matchNodes := make([]*cache.NodeInfo, 0)
-	for _, node := range nodes {
-		if podSetMatchesNodeLabels(psi, node.Node) {
-			matchNodes = append(matchNodes, node)
-		}
-	}
+// // The pod in PodSet can only schedule onto nodes that satisfy requirements in both NodeAffinity and nodeSelector.
+// func podSetMatchesNodeLabels(psi *podSetInfo, node *v1.Node) bool {
+// 	// Check if node.Labels match pod.Spec.NodeSelector.
+// 	if len(psi.podSet.NodeSelector) > 0 {
+// 		selector := labels.SelectorFromSet(labels.Set(psi.podSet.NodeSelector))
+// 		if !selector.Matches(labels.Set(node.Labels)) {
+// 			return false
+// 		}
+// 	}
 
-	return matchNodes
-}
-
-// The pod in PodSet can only schedule onto nodes that satisfy requirements in both NodeAffinity and nodeSelector.
-func podSetMatchesNodeLabels(psi *podSetInfo, node *v1.Node) bool {
-	// Check if node.Labels match pod.Spec.NodeSelector.
-	if len(psi.podSet.NodeSelector) > 0 {
-		selector := labels.SelectorFromSet(labels.Set(psi.podSet.NodeSelector))
-		if !selector.Matches(labels.Set(node.Labels)) {
-			return false
-		}
-	}
-
-	return true
-}
+// 	return true
+// }

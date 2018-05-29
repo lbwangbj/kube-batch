@@ -17,36 +17,19 @@ limitations under the License.
 package policy
 
 import (
-	"fmt"
-	"sync"
+	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy/plugins/drf"
 
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy/actions/allocate"
+	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy/actions/dispatch"
+
+	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/policy/framework"
 )
 
-var policyMap = make(map[string]Interface)
-var mutex sync.Mutex
-
 func init() {
-	RegisterPolicy(allocate.New())
+	framework.RegisterPluginBuilder(drf.New)
 }
 
-func New(name string) (Interface, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	policy, found := policyMap[name]
-	if !found {
-		return nil, fmt.Errorf("invalid policy name %s\n", name)
-	}
-
-	return policy, nil
-}
-
-func RegisterPolicy(policy Interface) error {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	policyMap[policy.Name()] = policy
-
-	return nil
+var ActionChain = []framework.Action{
+	allocate.New(),
+	dispatch.New(),
 }

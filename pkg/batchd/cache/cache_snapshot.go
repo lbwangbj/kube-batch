@@ -16,8 +16,12 @@ limitations under the License.
 
 package cache
 
+import "github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/api"
+
 type CacheSnapshot struct {
-	Pods   []*TaskInfo
-	Nodes  []*NodeInfo
-	Queues []*QueueInfo
+	Tasks  map[api.TaskID]*api.TaskInfo
+	Jobs   map[api.JobID]*api.JobInfo
+	Queues map[api.QueueID]*api.QueueInfo
+
+	Nodes map[api.NodeID]*api.NodeInfo
 }

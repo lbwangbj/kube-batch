@@ -14,22 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apis
+package framework
 
-// TaskStatus defines the status of a task/pod.
-type TaskStatus int
-
-const (
-	// Pending means the task is pending in the apiserver.
-	Pending TaskStatus = 1 << iota
-	// Binding means the scheduler send Bind request to apiserver.
-	Binding
-	// Bound means the task/Pod bounds to a host.
-	Bound
-	// Running means a task is running on the host.
-	Running
-	// Releasing means a task/pod is deleted.
-	Releasing
-	// Unknown means the status of task/pod is unknown to the scheduler.
-	Unknown
+import (
+	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/api"
 )
+
+type Event struct {
+	Task  *api.TaskInfo
+	Job   *api.JobInfo
+	Queue *api.QueueInfo
+	Node  *api.NodeInfo
+}
+
+type EventHandler struct {
+	OnAllocated   func(event *Event) error
+	OnDeallocated func(event *Event) error
+}

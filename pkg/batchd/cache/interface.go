@@ -17,7 +17,7 @@ limitations under the License.
 package cache
 
 import (
-	"k8s.io/api/core/v1"
+	"github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/api"
 )
 
 // Cache collects pods/nodes/queues information
@@ -32,9 +32,12 @@ type Cache interface {
 	// WaitForCacheSync waits for all cache synced
 	WaitForCacheSync(stopCh <-chan struct{}) bool
 
-	// AssumePod assumes a pod scheduled and aggregates the pod's information into its node.
-	// The implementation also decides the policy to expire pod before being confirmed (receiving Add event).
-	// After expiration, its information would be subtracted.
-	// TODO(jinzhej): clean up expire Pods
-	AssumePod(pod *v1.Pod) error
+	// UpdateTaskStatus updates task's status to the target status.
+	// UpdateTaskStatus(taskID types.UID, status api.TaskStatus) error
+
+	// Bind binds a task to the target host.
+	Bind(taskID api.TaskID, host api.NodeID) error
+
+	// Evict evicts a task from host.
+	Evict(taskID api.TaskID) error
 }

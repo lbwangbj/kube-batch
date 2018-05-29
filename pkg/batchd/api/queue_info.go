@@ -14,91 +14,65 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cache
+package api
 
 import (
+	"github.com/golang/glog"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/golang/glog"
 	arbv1 "github.com/kubernetes-incubator/kube-arbitrator/pkg/batchd/apis/v1"
 )
 
 type QueueInfo struct {
-	Queue *arbv1.Queue
-
-	Name      string
-	Namespace string
+	UID QueueID
 
 	// All jobs belong to this Queue
-	PodSets map[types.UID]*JobInfo
+	Jobs map[JobID]*JobInfo
 
-	// The pod that without `Owners`
-	Pods map[string]*TaskInfo
+	Queue *arbv1.Queue
 }
 
 func NewQueueInfo(queue *arbv1.Queue) *QueueInfo {
 	if queue == nil {
 		return &QueueInfo{
-			Name:      "",
-			Namespace: "",
-			Queue:     nil,
-
-			PodSets: make(map[types.UID]*JobInfo),
-			Pods:    make(map[string]*TaskInfo),
+			Queue: nil,
 		}
 	}
 
 	return &QueueInfo{
-		Name:      queue.Name,
-		Namespace: queue.Namespace,
-		Queue:     queue,
+		UID: QueueID(queue.Namespace),
 
-		PodSets: make(map[types.UID]*JobInfo),
-		Pods:    make(map[string]*TaskInfo),
+		Queue: queue,
 	}
 }
 
 func (ci *QueueInfo) SetQueue(queue *arbv1.Queue) {
 	if queue == nil {
-		ci.Name = ""
-		ci.Namespace = ""
 		ci.Queue = queue
-		ci.PodSets = make(map[types.UID]*JobInfo)
-		ci.Pods = make(map[string]*TaskInfo)
 		return
 	}
 
-	ci.Name = queue.Name
-	ci.Namespace = queue.Namespace
 	ci.Queue = queue
 }
 
 func (ci *QueueInfo) AddPod(pi *TaskInfo) {
-	if len(pi.Owner) == 0 {
-		ci.Pods[pi.Name] = pi
-	} else {
-		if _, found := ci.PodSets[pi.Owner]; !found {
-			ci.PodSets[pi.Owner] = NewJobInfo(pi.Owner)
-		}
-		ci.PodSets[pi.Owner].AddTaskInfo(pi)
+	if _, found := ci.Jobs[pi.Job]; !found {
+		ci.Jobs[pi.Job] = NewJobInfo(pi.Job)
 	}
+	ci.Jobs[pi.Job].AddTaskInfo(pi)
 }
 
 func (ci *QueueInfo) RemovePod(pi *TaskInfo) {
-	if len(pi.Owner) == 0 {
-		delete(ci.Pods, pi.Name)
-	} else {
-		if _, found := ci.PodSets[pi.Owner]; found {
-			ci.PodSets[pi.Owner].DeleteTaskInfo(pi)
-		}
+	if _, found := ci.Jobs[pi.Job]; found {
+		ci.Jobs[pi.Job].DeleteTaskInfo(pi)
 	}
 }
 
 func (ci *QueueInfo) AddPdb(pi *PdbInfo) {
-	for _, ps := range ci.PodSets {
+	for _, ps := range ci.Jobs {
 		if len(ps.PdbName) != 0 {
 			continue
 		}
@@ -121,7 +95,7 @@ func (ci *QueueInfo) AddPdb(pi *PdbInfo) {
 }
 
 func (ci *QueueInfo) RemovePdb(pi *PdbInfo) {
-	for _, ps := range ci.PodSets {
+	for _, ps := range ci.Jobs {
 		if len(ps.PdbName) == 0 {
 			continue
 		}
@@ -139,20 +113,13 @@ func (ci *QueueInfo) RemovePdb(pi *PdbInfo) {
 
 func (ci *QueueInfo) Clone() *QueueInfo {
 	info := &QueueInfo{
-		Name:      ci.Name,
-		Namespace: ci.Namespace,
-		Queue:     ci.Queue,
+		Queue: ci.Queue,
 
-		PodSets: make(map[types.UID]*JobInfo),
-		Pods:    make(map[string]*TaskInfo),
+		Jobs: make(map[JobID]*JobInfo),
 	}
 
-	for owner, ps := range ci.PodSets {
-		info.PodSets[owner] = ps.Clone()
-	}
-
-	for name, p := range ci.Pods {
-		info.Pods[name] = p.Clone()
+	for id, ps := range ci.Jobs {
+		info.Jobs[id] = ps.Clone()
 	}
 
 	return info
