@@ -22,6 +22,10 @@ import (
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/framework"
 )
 
+func init() {
+	framework.RegisterPluginBuilder("priority", New)
+}
+
 type priorityPlugin struct {
 	args *framework.PluginArgs
 }

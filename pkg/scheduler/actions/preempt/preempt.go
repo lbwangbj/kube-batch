@@ -24,6 +24,10 @@ import (
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/util"
 )
 
+func init() {
+	framework.RegisterAction(New())
+}
+
 type preemptAction struct {
 	ssn *framework.Session
 }

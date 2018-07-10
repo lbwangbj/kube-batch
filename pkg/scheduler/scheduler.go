@@ -26,6 +26,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
+	_ "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/actions/allocate"
+	_ "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/actions/decorate"
+	_ "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/actions/preempt"
+
+	_ "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/plugins/drf"
+	_ "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/plugins/gang"
+	_ "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/plugins/priority"
+
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/client"
 	schedcache "github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/cache"
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/framework"

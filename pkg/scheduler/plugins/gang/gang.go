@@ -23,6 +23,10 @@ import (
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/framework"
 )
 
+func init() {
+	framework.RegisterPluginBuilder("gang", New)
+}
+
 type gangPlugin struct {
 	args *framework.PluginArgs
 }

@@ -24,6 +24,10 @@ import (
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/framework"
 )
 
+func init() {
+	framework.RegisterAction(New())
+}
+
 type decorateAction struct {
 	ssn *framework.Session
 }

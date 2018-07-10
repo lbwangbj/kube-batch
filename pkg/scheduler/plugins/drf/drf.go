@@ -24,6 +24,10 @@ import (
 	"github.com/kubernetes-incubator/kube-arbitrator/pkg/scheduler/framework"
 )
 
+func init() {
+	framework.RegisterPluginBuilder("drf", New)
+}
+
 var shareDelta = 0.000001
 
 type drfAttr struct {
