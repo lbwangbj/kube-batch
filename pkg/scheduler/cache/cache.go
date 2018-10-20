@@ -102,6 +102,8 @@ func (de *defaultEvictor) Evict(p *v1.Pod) error {
 	// TODO (k82cn): makes grace period configurable.
 	threeSecs := int64(3)
 
+	glog.V(3).Infof("Evicting pod %v/%v", p.Namespace, p.Name)
+
 	if err := de.kubeclient.CoreV1().Pods(p.Namespace).Delete(p.Name, &metav1.DeleteOptions{
 		GracePeriodSeconds: &threeSecs,
 	}); err != nil {
